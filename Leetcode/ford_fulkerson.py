@@ -1,7 +1,8 @@
+# from https://www.geeksforgeeks.org/ford-fulkerson-algorithm-for-maximum-flow-problem/
 # do a dfs or bfs for a residual graph
 
 from collections import defaultdict
-import graphlib
+#import graphlib
 
 class Graph:
     def __init__(self, graph):
@@ -46,9 +47,27 @@ class Graph:
         return False
 
 
-
-graph = [[1, 2], [0, 2, 100], [0, 1, 100]]
+# adjacency matrix for a graph from 
+# https://www.geeksforgeeks.org/ford-fulkerson-algorithm-for-maximum-flow-problem/
+graph = [
+	[ 0, 16,  13, 0,  0,  0 ],
+    [ 0,  0, 10, 12,  0,  0 ],
+    [ 0,  4,  0,  0, 14,  0 ],
+    [ 0,  0,  9,  0,  0, 20 ],
+    [ 0,  0,  0,  7,  0,  4 ],
+    [ 0,  0,  0,  0,  0,  0 ]
+]
+# hw4 figure 1
+# s: 0, u: 1, v:2, w:3, x:4, t:5
+graph1 = [[0, 8, 0, 0, 0, 0],
+[0, 0, 0, 3, 0, 5],
+[0, 0, 0, 0, 0, 0],
+[0, 0, 0, 0, 0, 3],
+[0, 0, 0, 0, 0, 0],
+[0, 0, 0, 0, 0, 0]]
 source = 0
-sink = 100
+sink = 5
 flow = Graph(graph)
+flow1 = Graph(graph1)
+print(flow.ford_fulkerson(source, sink))
 print(flow.ford_fulkerson(source, sink))
