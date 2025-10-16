@@ -12,7 +12,8 @@ def load_places_data(file_path):
     """
     # Load the CSV file into a DataFrame
     df = pd.read_csv(file_path)
-
+    df = pd.DataFrame(df)
+    return df
   
   
   
