@@ -37,11 +37,14 @@ def load_places_data():
     while True:
         r = requests.get(base_url, params=params)
         batch = r.json()
+        # Break the loop if no more data is returned
         if not batch:
             break
-    data.extend(batch)
-    params["$offset"] += 50000
-    print(f"Fetched {len(batch)} rows...")
+        
+        data.extend(batch)
+        # Increment the offset for the next batch
+        params["$offset"] += 50000
+        print(f"Fetched {len(batch)} rows...")
 
     df = pd.DataFrame(data)
     print(f"Total rows: {len(df)}")
