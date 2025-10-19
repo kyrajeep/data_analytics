@@ -48,6 +48,18 @@ def load_places_data():
 
     df = pd.DataFrame(data)
     print(f"Total rows: {len(df)}")
+    # Before returning, let's verify we have data from all states
+    state_counts = df['stateabbr'].value_counts()
+    missing_states = set(states) - set(df['stateabbr'].unique())
+    
+    if missing_states:
+        print(f"Warning: Missing data from states: {missing_states}")
+        print("States and their record counts:")
+        print(state_counts)
+    
+    print(f"Number of states in data: {df['stateabbr'].nunique()}")
+    print(f"Total records: {len(df)}")
+    
     return df
 
 def separate_category_features(df):
