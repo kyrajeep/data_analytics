@@ -11,31 +11,21 @@ def load_places_data():
           'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV',
           'NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
           'TX','UT','VT','VA','WA','WV','WI','WY']
-
-    """all_data = []
-    for s in states:
-        params = {"$where": "measureid='STROKE'", "stateabbr": s, "$limit": 50000, "$offset": 0}
-        r = requests.get(base_url, params=params)
-    data = r.json()
-    if data:
-        all_data.extend(data)
-    print(f"{s}: {len(data)} rows")
-
-    df = pd.DataFrame(all_data)
-    print(f"Total rows: {len(df)}")
-    """
-    #df = pd.read_csv(file_path)
-    #df = pd.DataFrame(df)
-    base_url = "https://chronicdata.cdc.gov/resource/cwsq-ngmh.json"
+ 
     params = {
         "$where": "measureid='STROKE'",
         "$limit": 50000,
         "$offset": 0
     }
-
     data = []
+    offset = 0
     while True:
-        r = requests.get(base_url, params=params)
+        current_params = {
+            "$where": "measureid='STROKE'",
+            "$limit": 50000,
+            "$offset": offset
+        }
+        r = requests.get(base_url, params=current_params)
         batch = r.json()
         # Break the loop if no more data is returned
         if not batch:
@@ -43,10 +33,12 @@ def load_places_data():
         
         data.extend(batch)
         # Increment the offset for the next batch
+        offset += 50000
+        print(f"Fetched {len(batch)} rows...")
         params["$offset"] += 50000
         print(f"Fetched {len(batch)} rows...")
 
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(all_data)
     print(f"Total rows: {len(df)}")
     # Before returning, let's verify we have data from all states
     state_counts = df['stateabbr'].value_counts()
