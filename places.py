@@ -3,7 +3,9 @@ import pandas as pd
 
 def load_places_data():
     """
-    Load places data from all states for stroke measure.
+    Load places data from all states including health outcomes and risk factors.
+    Returns:
+        tuple: (df_long, df_wide) containing the data in both formats
     """
     # Load the CSV file into a DataFrame
     base_url = "https://chronicdata.cdc.gov/resource/cwsq-ngmh.json"
@@ -11,18 +13,30 @@ def load_places_data():
           'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV',
           'NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
           'TX','UT','VT','VA','WA','WV','WI','WY']
- 
-    params = {
-        "$where": "measureid='STROKE'",
-        "$limit": 50000,
-        "$offset": 0
-    }
+
+    # Define measures we're interested in
+    measures_of_interest = [
+        'STROKE',          # Stroke
+        'BPHIGH',         # High Blood Pressure
+        'DIABETES',       # Diabetes
+        'OBESITY',        # Obesity
+        'CSMOKING',       # Current Smoking
+        'PHLTH',          # Poor Physical Health
+        'MHLTH',          # Poor Mental Health
+        'BINGE',          # Binge Drinking
+        'LPA',            # Physical Inactivity
+        'CHOLSCREEN',     # Cholesterol Screening
+        'CHD'             # Coronary Heart Disease
+    ]
+    
+    # Create WHERE clause for multiple measures
+    measures_clause = " OR ".join([f"measureid='{m}'" for m in measures_of_interest])
     
     data = []
     offset = 0
     while True:
         current_params = {
-            "$where": "measureid='STROKE'",
+            "$where": f"({measures_clause})",
             "$limit": 50000,
             "$offset": offset
         }
@@ -94,62 +108,60 @@ def separate_category_features(df):
     return 
 
 
-def analyze_stroke_data(df):
+def analyze_stroke_data(df_wide):
     '''
     Analyze stroke-related data from the places DataFrame.
-    Returns a DataFrame with stroke prevalence by state.
+    Args:
+        df_wide: DataFrame in wide format with states as rows and health measures as columns
+    Returns:
+        DataFrame with stroke prevalence by state
     '''
-    # Convert data_value to numeric
-    df['data_value'] = pd.to_numeric(df['data_value'], errors='coerce')
-
-    # Filter for stroke-related health outcomes
-    stroke_df = df[(df['category'] == 'Health Outcomes') & 
-                   (df['measure'].str.contains('Stroke', case=False, na=False))]
-
-    # Aggregate by state
-    stroke_state = stroke_df.groupby('stateabbr')['data_value'].mean().reset_index()
-    stroke_state = stroke_state.sort_values('data_value', ascending=False)
+    # Sort states by stroke rate
+    stroke_by_state = df_wide[['stateabbr', 'stroke_rate']].sort_values('stroke_rate', ascending=False)
     
     print("Top 5 states with highest stroke prevalence:")
-    print(stroke_state.head())
-    return stroke_state
+    print(stroke_by_state.head())
+    
+    print("\nBottom 5 states with lowest stroke prevalence:")
+    print(stroke_by_state.tail())
+    
+    return stroke_by_state
 
-def analyze_risk_factors(df):
+def analyze_risk_factors(df_long, df_wide):
     '''
-    Analyze correlation between stroke rates and other health factors.
-    Returns a dictionary with correlation coefficients.
+    Analyze correlation between stroke rates and other health factors using wide-format data.
+    Returns correlation analysis and state-level statistics.
     '''
-    df['data_value'] = pd.to_numeric(df['data_value'], errors='coerce')
+    print("\n=== Risk Factor Analysis Results ===")
     
-    # Get stroke rates by state
-    stroke_rates = df[
-        (df['category'] == 'Health Outcomes') & 
-        (df['measure'].str.contains('Stroke', case=False))
-    ].groupby('stateabbr')['data_value'].mean()
+    # Calculate correlations with stroke rate
+    risk_factors = [col for col in df_wide.columns 
+                   if col not in ['stateabbr', 'stroke_rate']]
     
-    # Analyze correlation with other health factors
     correlations = {}
-    health_factors = df[df['category'] == 'Health Outcomes']
+    for factor in risk_factors:
+        correlation = df_wide['stroke_rate'].corr(df_wide[factor])
+        correlations[factor] = correlation
     
-    for measure in health_factors['measure'].unique():
-        if 'Stroke' not in measure:
-            factor_rates = health_factors[
-                health_factors['measure'] == measure
-            ].groupby('stateabbr')['data_value'].mean()
-            
-            # Calculate correlation where we have both stroke and factor data
-            common_states = stroke_rates.index.intersection(factor_rates.index)
-            if len(common_states) > 0:
-                correlation = stroke_rates[common_states].corr(factor_rates[common_states])
-                correlations[measure] = correlation
-    
-    # Print top correlations
+    # Sort correlations by absolute value
     sorted_correlations = sorted(correlations.items(), key=lambda x: abs(x[1]), reverse=True)
-    print("\nTop health factors correlated with stroke rates:")
-    for measure, corr in sorted_correlations[:5]:
-        print(f"{measure}: {corr:.3f}")
     
-    return correlations
+    print("\nCorrelations with Stroke Rate:")
+    for factor, corr in sorted_correlations:
+        print(f"{factor:20} Correlation: {corr:6.3f}")
+        
+        # Print top 3 states for each factor
+        top_states = df_wide.nlargest(3, factor)[['stateabbr', factor, 'stroke_rate']]
+        print(f"  Top 3 states with highest {factor}:")
+        for _, row in top_states.iterrows():
+            print(f"    {row['stateabbr']}: {row[factor]:.1f}% (Stroke Rate: {row['stroke_rate']:.1f}%)")
+    
+    # Create summary statistics
+    summary_stats = df_wide.describe()
+    print("\nSummary Statistics:")
+    print(summary_stats)
+    
+    return correlations, df_wide
 
 def analyze_prevention_measures(df):
     '''
@@ -179,47 +191,7 @@ def analyze_prevention_measures(df):
     
     return prevention_state
 
-def analyze_risk_factors(df: pd.DataFrame) -> dict:
-    '''
-    Analyze potential risk factors for stroke across states.
-    
-    Args:
-        df (pd.DataFrame): The input DataFrame containing PLACES data
-        
-    Returns:
-        dict: Dictionary containing correlation results for different risk factors
-    '''
-    # Convert data values to numeric
-    df['data_value'] = pd.to_numeric(df['data_value'], errors='coerce')
-    
-    # Get base stroke data by state
-    stroke_data = df[
-        (df['category'] == 'Health Outcomes') & 
-        (df['measure'].str.contains('Stroke', case=False, na=False))
-    ].groupby('stateabbr')['data_value'].mean()
-    
-    # Risk factors to analyze
-    risk_factors = [
-        'High Blood Pressure',
-        'Diabetes',
-        'Physical Inactivity',
-        'Obesity',
-        'Smoking'
-    ]
-    
-    correlations = {}
-    for factor in risk_factors:
-        factor_data = df[
-            df['measure'].str.contains(factor, case=False, na=False)
-        ].groupby('stateabbr')['data_value'].mean()
-        
-        # Calculate correlation with stroke data
-        correlation = stroke_data.corr(factor_data)
-        correlations[factor] = correlation
-        
-        print(f"\nCorrelation between Stroke and {factor}: {correlation:.3f}")
-    
-    return correlations
+
 
 def analyze_prevention_measures(df: pd.DataFrame) -> pd.DataFrame:
     '''
@@ -255,21 +227,22 @@ def main():
     """
     # Load the data
     print("Loading PLACES data...")
-    places_df = load_places_data()
+    places_df_long, places_df_wide = load_places_data()
     
     print("\nAnalyzing stroke prevalence by state...")
-    stroke_by_state = analyze_stroke_data(places_df)
+    stroke_by_state = analyze_stroke_data(places_df_wide)
     
     print("\nAnalyzing risk factors...")
-    risk_correlations = analyze_risk_factors(places_df)
+    risk_correlations, risk_data = analyze_risk_factors(places_df_long, places_df_wide)
     
     print("\nAnalyzing prevention measures...")
-    prevention_analysis = analyze_prevention_measures(places_df)
+    prevention_analysis = analyze_prevention_measures(places_df_long)
     
     # You can add visualization code here later
     return {
         'stroke_data': stroke_by_state,
         'risk_correlations': risk_correlations,
+        'risk_data': risk_data,
         'prevention_data': prevention_analysis
     }
 
