@@ -17,6 +17,7 @@ def load_places_data():
         "$limit": 50000,
         "$offset": 0
     }
+    
     data = []
     offset = 0
     while True:
@@ -35,24 +36,51 @@ def load_places_data():
         # Increment the offset for the next batch
         offset += 50000
         print(f"Fetched {len(batch)} rows...")
-        params["$offset"] += 50000
-        print(f"Fetched {len(batch)} rows...")
 
+    # Convert to DataFrame
     df = pd.DataFrame(data)
     print(f"Total rows: {len(df)}")
-    # Before returning, let's verify we have data from all states
-    state_counts = df['stateabbr'].value_counts()
-    missing_states = set(states) - set(df['stateabbr'].unique())
     
+    # Convert data_value to numeric
+    df['data_value'] = pd.to_numeric(df['data_value'], errors='coerce')
+    
+    # Create wide format DataFrame
+    df_wide = df.pivot_table(
+        index='stateabbr',
+        columns='measureid',
+        values='data_value',
+        aggfunc='mean'
+    ).reset_index()
+    
+    # Rename columns to be more descriptive
+    measure_names = {
+        'STROKE': 'stroke_rate',
+        'BPHIGH': 'blood_pressure',
+        'DIABETES': 'diabetes',
+        'OBESITY': 'obesity',
+        'CSMOKING': 'current_smoking',
+        'PHLTH': 'poor_physical_health',
+        'MHLTH': 'poor_mental_health',
+        'BINGE': 'binge_drinking',
+        'LPA': 'physical_inactivity',
+        'CHOLSCREEN': 'cholesterol_screening',
+        'CHD': 'heart_disease'
+    }
+    df_wide.rename(columns=measure_names, inplace=True)
+    
+    # Check for missing states
+    missing_states = set(states) - set(df['stateabbr'].unique())
     if missing_states:
         print(f"Warning: Missing data from states: {missing_states}")
         print("States and their record counts:")
-        print(state_counts)
+        print(df['stateabbr'].value_counts())
     
     print(f"Number of states in data: {df['stateabbr'].nunique()}")
     print(f"Total records: {len(df)}")
+    print("\nWide format data shape:", df_wide.shape)
+    print("Available measures:", list(df_wide.columns))
     
-    return df
+    return df, df_wide
 
 def separate_category_features(df):
     '''
