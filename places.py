@@ -134,14 +134,18 @@ def analyze_risk_factors(df_long, df_wide):
     '''
     print("\n=== Risk Factor Analysis Results ===")
     
-    # Calculate correlations with stroke rate
-    risk_factors = [col for col in df_wide.columns 
-                   if col not in ['stateabbr', 'stroke_rate']]
+    # Define health measures to analyze (excluding metadata and derived columns)
+    health_measures = [
+        'blood_pressure', 'diabetes', 'obesity', 'current_smoking',
+        'physical_inactivity', 'heart_disease', 'poor_physical_health',
+        'poor_mental_health', 'binge_drinking'
+    ]
     
     correlations = {}
-    for factor in risk_factors:
-        correlation = df_wide['stroke_rate'].corr(df_wide[factor])
-        correlations[factor] = correlation
+    for factor in health_measures:
+        if factor in df_wide.columns:
+            correlation = df_wide['stroke_rate'].corr(df_wide[factor])
+            correlations[factor] = correlation
     
     # Sort correlations by absolute value
     sorted_correlations = sorted(correlations.items(), key=lambda x: abs(x[1]), reverse=True)
@@ -151,13 +155,14 @@ def analyze_risk_factors(df_long, df_wide):
         print(f"{factor:20} Correlation: {corr:6.3f}")
         
         # Print top 3 states for each factor
-        top_states = df_wide.nlargest(3, factor)[['stateabbr', factor, 'stroke_rate']]
+        top_states = df_wide.nlargest(3, factor)[['state_name', factor, 'stroke_rate', 'region']]
         print(f"  Top 3 states with highest {factor}:")
         for _, row in top_states.iterrows():
-            print(f"    {row['stateabbr']}: {row[factor]:.1f}% (Stroke Rate: {row['stroke_rate']:.1f}%)")
+            print(f"    {row['state_name']} ({row['region']}): {row[factor]:.1f}% (Stroke Rate: {row['stroke_rate']:.1f}%)")
     
-    # Create summary statistics
-    summary_stats = df_wide.describe()
+    # Create summary statistics for numeric columns only
+    numeric_cols = df_wide.select_dtypes(include=['float64', 'int64']).columns
+    summary_stats = df_wide[numeric_cols].describe()
     print("\nSummary Statistics:")
     print(summary_stats)
     
@@ -221,6 +226,101 @@ def analyze_prevention_measures(df: pd.DataFrame) -> pd.DataFrame:
 
     
 
+def prepare_tableau_data(df_wide):
+    """
+    Prepare data for Tableau visualization by adding state names, regions,
+    rankings, and risk categories.
+    
+    Args:
+        df_wide (pd.DataFrame): Wide format DataFrame with health measures
+    
+    Returns:
+        pd.DataFrame: Enhanced DataFrame ready for Tableau
+    """
+    # Add state names
+    state_names = {
+        'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas',
+        'CA': 'California', 'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware',
+        'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho',
+        'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas',
+        'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+        'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi',
+        'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+        'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+        'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma',
+        'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+        'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah',
+        'VT': 'Vermont', 'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia',
+        'WI': 'Wisconsin', 'WY': 'Wyoming'
+    }
+    
+    # Add geographic regions
+    state_regions = {
+        'CT': 'Northeast', 'ME': 'Northeast', 'MA': 'Northeast', 'NH': 'Northeast',
+        'RI': 'Northeast', 'VT': 'Northeast', 'NJ': 'Northeast', 'NY': 'Northeast',
+        'PA': 'Northeast', 'IL': 'Midwest', 'IN': 'Midwest', 'MI': 'Midwest',
+        'OH': 'Midwest', 'WI': 'Midwest', 'IA': 'Midwest', 'KS': 'Midwest',
+        'MN': 'Midwest', 'MO': 'Midwest', 'NE': 'Midwest', 'ND': 'Midwest',
+        'SD': 'Midwest', 'DE': 'South', 'FL': 'South', 'GA': 'South',
+        'MD': 'South', 'NC': 'South', 'SC': 'South', 'VA': 'South',
+        'WV': 'South', 'AL': 'South', 'KY': 'South', 'MS': 'South',
+        'TN': 'South', 'AR': 'South', 'LA': 'South', 'OK': 'South',
+        'TX': 'South', 'AZ': 'West', 'CO': 'West', 'ID': 'West',
+        'MT': 'West', 'NV': 'West', 'NM': 'West', 'UT': 'West',
+        'WY': 'West', 'AK': 'West', 'CA': 'West', 'HI': 'West',
+        'OR': 'West', 'WA': 'West'
+    }
+    
+    # Create a copy to avoid modifying the original
+    tableau_df = df_wide.copy()
+    
+    # Add state names and regions
+    tableau_df['state_name'] = tableau_df['stateabbr'].map(state_names)
+    tableau_df['region'] = tableau_df['stateabbr'].map(state_regions)
+    
+    # Add rankings for each measure
+    for col in tableau_df.columns:
+        if col not in ['stateabbr', 'state_name', 'region']:
+            tableau_df[f'{col}_rank'] = tableau_df[col].rank(ascending=False)
+    
+    # Create risk categories based on percentiles
+    risk_measures = ['stroke_rate', 'blood_pressure', 'diabetes', 'obesity', 
+                    'current_smoking', 'physical_inactivity']
+    
+    for measure in risk_measures:
+        tableau_df[f'{measure}_category'] = pd.qcut(
+            tableau_df[measure], 
+            q=5, 
+            labels=['Very Low', 'Low', 'Moderate', 'High', 'Very High']
+        )
+    
+    # Calculate composite risk score
+    risk_columns = [col for col in tableau_df.columns 
+                   if col in risk_measures]
+    
+    # Normalize each risk factor and calculate mean
+    normalized_risks = tableau_df[risk_columns].apply(
+        lambda x: (x - x.min()) / (x.max() - x.min())
+    )
+    tableau_df['composite_risk_score'] = normalized_risks.mean(axis=1)
+    
+    # Add composite risk category
+    tableau_df['risk_category'] = pd.qcut(
+        tableau_df['composite_risk_score'],
+        q=5,
+        labels=['Very Low Risk', 'Low Risk', 'Moderate Risk', 'High Risk', 'Very High Risk']
+    )
+    
+    print("\nTableau data preparation complete:")
+    print(f"Number of states: {len(tableau_df)}")
+    print("Added columns:", 
+          "\n - State names and regions",
+          "\n - Rankings for all measures",
+          "\n - Risk categories for key measures",
+          "\n - Composite risk score and category")
+    
+    return tableau_df
+
 def main():
     """
     Main function to run the stroke data analysis pipeline.
@@ -229,21 +329,46 @@ def main():
     print("Loading PLACES data...")
     places_df_long, places_df_wide = load_places_data()
     
+    # Prepare data for Tableau
+    tableau_ready_df = prepare_tableau_data(places_df_wide)
+    
     print("\nAnalyzing stroke prevalence by state...")
-    stroke_by_state = analyze_stroke_data(places_df_wide)
+    stroke_by_state = analyze_stroke_data(tableau_ready_df)
     
     print("\nAnalyzing risk factors...")
-    risk_correlations, risk_data = analyze_risk_factors(places_df_long, places_df_wide)
+    risk_correlations, risk_data = analyze_risk_factors(places_df_long, tableau_ready_df)
     
     print("\nAnalyzing prevention measures...")
     prevention_analysis = analyze_prevention_measures(places_df_long)
     
-    # You can add visualization code here later
+    # Save the Tableau-ready data to CSV
+    output_path = 'stroke_analysis_tableau.csv'
+    tableau_ready_df.to_csv(output_path, index=False)
+    print(f"\nSaved Tableau-ready data to {output_path}")
+    
+    print("\nSuggested Tableau Visualizations:")
+    print("1. State-Level Risk Map:")
+    print("   - Use composite_risk_score for choropleth coloring")
+    print("   - Use risk_category for filtering")
+    
+    print("\n2. Regional Analysis Dashboard:")
+    print("   - Compare health measures by region")
+    print("   - Show regional averages vs state values")
+    
+    print("\n3. Correlation Matrix:")
+    print("   - Create scatter plots of stroke_rate vs risk factors")
+    print("   - Use different colors for regions")
+    
+    print("\n4. Risk Factor Rankings:")
+    print("   - Create bar charts showing state rankings for each measure")
+    print("   - Enable measure selection via parameter")
+    
     return {
         'stroke_data': stroke_by_state,
         'risk_correlations': risk_correlations,
         'risk_data': risk_data,
-        'prevention_data': prevention_analysis
+        'prevention_data': prevention_analysis,
+        'tableau_data': tableau_ready_df
     }
 
 if __name__ == '__main__':
