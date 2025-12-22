@@ -3,6 +3,7 @@
 ## Project Overview
 This project analyzes stroke prevalence and its risk factors across U.S. states using the CDC's PLACES dataset. The analysis explores correlations between stroke rates and various health factors, identifies regional patterns, and provides insights into prevention measures.
 
+Link to the Tableau Visualization: https://public.tableau.com/views/stroke_cleaned/Dashboard1?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link
 ## Key Findings
 
 ### Stroke Prevalence
